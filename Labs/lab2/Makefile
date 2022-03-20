@@ -61,7 +61,7 @@ $(error Set ALTERAOCLSDKROOT to the root directory of the Intel(R) FPGA SDK for 
 endif
 
 # OpenCL compile and link flags.
-AOCL_COMPILE_CONFIG := $(shell aocl compile-config ) -DAOCL -O2 -fPIC -Iaocl_common/inc
+AOCL_COMPILE_CONFIG := $(shell aocl compile-config ) -DAOCL -O2 -fPIC -Icommon/inc
 AOCL_LINK_CONFIG := $(shell aocl link-config ) 
 
 # Compilation flags
