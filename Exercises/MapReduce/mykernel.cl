@@ -1,5 +1,6 @@
 __kernel void calc_pi( int num_items, __global float* global_result)
 {
+    printf("are we even here");
     int indx = get_global_id(0);
     int i;
     __local float local_sum= 0.0f;
