@@ -1,170 +1,219 @@
-Skip to content
-Search or jump to…
-Pull requests
-Issues
-Marketplace
-Explore
- 
-@mrjambert 
-mrjambert
-/
-eece-6540-labs
-Public
-forked from ACANETS/eece-6540-labs
-Code
-Pull requests
-Actions
-Projects
-Wiki
-Security
-Insights
-Settings
-eece-6540-labs/Exercises/MatrixMulti/Makefile
-@yanluo
-yanluo update Makefile for MatrixMulti
-Latest commit 2e0718d on Feb 9, 2020
- History
- 2 contributors
-@yanluo-uml@yanluo
-127 lines (98 sloc)  3.45 KB
-   
-# Makefile for building OpenCL programs
-#
-# yluo modified for compilation on multiple OS platforms
-#
-# Reference:
-#   http://cjlarose.com/2015/02/05/makefile-for-opencl-development.html
-#
-UNAME_S := $(shell uname -s)
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 
-# on MacOS
-ifeq ($(UNAME_S),Darwin)
-OPENCLC=/System/Library/Frameworks/OpenCL.framework/Libraries/openclc
-BUILD_DIR=./build
-EXECUTABLE=main
-.SUFFIXES:
-KERNEL_ARCH=i386 x86_64 gpu_32 gpu_64
-BITCODES=$(patsubst %, mykernel.cl.%.bc, $(KERNEL_ARCH))
+#ifdef __APPLE__
+#include <OpenCL/opencl.h>
+#else
+#include <CL/cl.h>
+#endif
 
-$(EXECUTABLE): $(BUILD_DIR)/mykernel.cl.o $(BUILD_DIR)/main.o $(BITCODES)
-	clang -framework OpenCL -o $@ $(BUILD_DIR)/mykernel.cl.o $(BUILD_DIR)/main.o
+#ifdef AOCL
+#include "CL/opencl.h"
+#include "AOCLUtils/aocl_utils.h"
 
-$(BUILD_DIR)/mykernel.cl.o: mykernel.cl.c
-	mkdir -p $(BUILD_DIR)
-	clang -c -Os -Wall -arch x86_64 -o $@ -c mykernel.cl.c
+using namespace aocl_utils;
+void cleanup();
+#endif
 
-$(BUILD_DIR)/main.o: main.c mykernel.cl.h
-	mkdir -p $(BUILD_DIR)
-	clang -c -Os -Wall -arch x86_64 -o $@ -c $<
+#define MAX_SOURCE_SIZE (0x100000)
+#define DEVICE_NAME_LEN 128
+static char dev_name[DEVICE_NAME_LEN];
 
-mykernel.cl.c mykernel.cl.h: mykernel.cl
-	$(OPENCLC) -x cl -cl-std=CL1.1 -cl-auto-vectorize-enable -emit-gcl $<
+static float A[8] = {
+  1.0f,  1.0f,  1.0f,  1.0f,
+  1.0f,  1.0f,  1.0f,  1.0f};
 
-mykernel.cl.%.bc: mykernel.cl
-	$(OPENCLC) -x cl -cl-std=CL1.1 -Os -arch $* -emit-llvm -o $@ -c $<
+static float B[24] = {
+  2.0f,  2.0f,  2.0f,  2.0f, 2.0f, 2.0f,
+  2.0f,  2.0f,  2.0f,  2.0f, 2.0f, 2.0f,
+  2.0f,  2.0f,  2.0f,  2.0f, 2.0f, 2.0f,
+  2.0f,  2.0f,  2.0f,  2.0f, 2.0f, 2.0f};
 
-.PHONY: clean
-clean:
-	rm -rf $(BUILD_DIR) mykernel.cl.h mykernel.cl.c $(EXECUTABLE) *.bc
-endif
+int main()
+{
+    cl_uint platformCount;
+    cl_platform_id* platforms;
+    cl_device_id device_id;
+    cl_uint ret_num_devices;
+    cl_int ret;
+    cl_context context = NULL;
+    cl_command_queue command_queue = NULL;
+    cl_program program = NULL;
+    cl_kernel kernel = NULL;
 
-# on Linux for Intel FPGA OCL
-ifeq ($(UNAME_S),Linux)
+    FILE *fp;
+    char fileName[] = "./mykernel.cl";
+    char *source_str;
+    size_t source_size;
 
-# You must configure ALTERAOCLSDKROOT to point the root directory of the Intel(R) FPGA SDK for OpenCL(TM)
-# software installation.
-# See http://www.altera.com/literature/hb/opencl-sdk/aocl_getting_started.pdf 
-# for more information on installing and configuring the Intel(R) FPGA SDK for OpenCL(TM).
+    int wA=4;
+    int hA=2;
+    int wB=6;
+    int hB=4;
+    int wC = wB;
+    int hC = hA;
 
-ifeq ($(VERBOSE),1)
-ECHO :=
-else
-ECHO := @
-endif
+#ifdef __APPLE__
+    /* Get Platform and Device Info */
+    clGetPlatformIDs(1, NULL, &platformCount);
+    platforms = (cl_platform_id*) malloc(sizeof(cl_platform_id) * platformCount);
+    clGetPlatformIDs(platformCount, platforms, NULL);
+    // we only use platform 0, even if there are more plantforms
+    // Query the available OpenCL device.
+    ret = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_DEFAULT, 1, &device_id, &ret_num_devices);
+    ret = clGetDeviceInfo(device_id, CL_DEVICE_NAME, DEVICE_NAME_LEN, dev_name, NULL);
+    printf("device name= %s\n", dev_name);
+#else
 
-# Where is the Intel(R) FPGA SDK for OpenCL(TM) software?
-ifeq ($(wildcard $(ALTERAOCLSDKROOT)),)
-$(error Set ALTERAOCLSDKROOT to the root directory of the Intel(R) FPGA SDK for OpenCL(TM) software installation)
-endif
-ifeq ($(wildcard $(ALTERAOCLSDKROOT)/host/include/CL/opencl.h),)
-$(error Set ALTERAOCLSDKROOT to the root directory of the Intel(R) FPGA SDK for OpenCL(TM) software installation.)
-endif
+#ifdef AOCL  /* Altera FPGA */
+    // get all platforms
+    clGetPlatformIDs(0, NULL, &platformCount);
+    platforms = (cl_platform_id*) malloc(sizeof(cl_platform_id) * platformCount);
+    // Get the OpenCL platform.
+    platforms[0] = findPlatform("Intel(R) FPGA");
+    if(platforms[0] == NULL) {
+      printf("ERROR: Unable to find Intel(R) FPGA OpenCL platform.\n");
+      return false;
+    }
+    // Query the available OpenCL device.
+    getDevices(platforms[0], CL_DEVICE_TYPE_ALL, &ret_num_devices);
+    printf("Platform: %s\n", getPlatformName(platforms[0]).c_str());
+    printf("Using one out of %d device(s)\n", ret_num_devices);
+    ret = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_DEFAULT, 1, &device_id, &ret_num_devices);
+    printf("device name=  %s\n", getDeviceName(device_id).c_str());
+#else
+#error "unknown OpenCL SDK environment"
+#endif
 
-# OpenCL compile and link flags.
-AOCL_COMPILE_CONFIG := $(shell aocl compile-config ) -DAOCL -O2 -fPIC -Iaocl_common/inc
-AOCL_LINK_CONFIG := $(shell aocl link-config ) 
+#endif
 
-# Compilation flags
-ifeq ($(DEBUG),1)
-CXXFLAGS += -g
-else
-CXXFLAGS += -O2
-endif
+    /* Create OpenCL context */
+    context = clCreateContext(NULL, 1, &device_id, NULL, NULL, &ret);
 
-# Compiler
-CXX := g++
-AOC := aoc
+    /* Create Command Queue */
+    command_queue = clCreateCommandQueue(context, device_id, 0, &ret);
 
-# Target
-TARGET := main
-TARGET_DIR := bin
+#ifdef __APPLE__
+    /* Load the source code containing the kernel*/
+    fp = fopen(fileName, "r");
+    if (!fp) {
+      fprintf(stderr, "Failed to load kernel.\n");
+      exit(1);
+    }
+    source_str = (char*)malloc(MAX_SOURCE_SIZE);
+    source_size = fread(source_str, 1, MAX_SOURCE_SIZE, fp);
+    fclose(fp);
 
-# Directories
-INC_DIRS := ../common/inc 
-LIB_DIRS :=
+    /* Create Kernel Program from the source */
+    program = clCreateProgramWithSource(context, 1, (const char **)&source_str,
+              (const size_t *)&source_size, &ret);
+    if (ret != CL_SUCCESS) {
+      printf("Failed to create program from source.\n");
+      exit(1);
+    }
+#else
 
+#ifdef AOCL  /* on FPGA we need to create kernel from binary */
+   /* Create Kernel Program from the binary */
+   std::string binary_file = getBoardBinaryFile("mykernel", device_id);
+   printf("Using AOCX: %s\n", binary_file.c_str());
+   program = createProgramFromBinary(context, binary_file.c_str(), &device_id, 1);
+#else
+#error "unknown OpenCL SDK environment"
+#endif
 
-# Files
-INCS := $(wildcard )
-SRCS := $(wildcard *.cpp *.c ../common/src/AOCLUtils/*.cpp)
-LIBS := rt pthread
+#endif
 
-KERNEL := mykernel
-AOCX := $(KERNEL).aocx
-CMDMSG := "To run the emulated device: \n   cd bin \n   CL_CONTEXT_EMULATOR_DEVICE_INTELFPGA=1 ./main"
+    /* Build Kernel Program */
+    ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
+    if (ret != CL_SUCCESS) {
+      printf("Failed to build program.\n");
+      exit(1);
+    }
 
-# Make it all!
-all : $(TARGET_DIR)/$(TARGET)
+    /* Create OpenCL Kernel */
+    kernel = clCreateKernel(program, "simpleMultiply", &ret);
+    if (ret != CL_SUCCESS) {
+      printf("Failed to create kernel.\n");
+      exit(1);
+    }
 
-# Host executable target.
-$(TARGET_DIR)/$(TARGET) : Makefile $(SRCS) $(INCS) $(TARGET_DIR)
-	$(ECHO)$(CXX) $(CPPFLAGS) $(CXXFLAGS) -fPIC $(foreach D,$(INC_DIRS),-I$D) \
-                        $(AOCL_COMPILE_CONFIG) $(SRCS) $(AOCL_LINK_CONFIG) \
-                        $(foreach D,$(LIB_DIRS),-L$D) \
-                        $(foreach L,$(LIBS),-l$L) \
-                        -o $(TARGET_DIR)/$(TARGET)
+    float *C = (float *)calloc (hC * wC ,  sizeof(float));
+    for (int i = 0; i < wC*hC; i++) {
+      printf ("%f ", C[i]);
+    }
+    printf("\n");
 
-$(TARGET_DIR) :
-	$(ECHO)mkdir $(TARGET_DIR)
-        
-emu: $(KERNEL).emu $(TARGET_DIR)/$(TARGET)
+    /* We assume A, B, C are float arrays which
+    have been declared and initialized */
+    /* allocate space for Matrix A on the device */
+    cl_mem bufferA = clCreateBuffer(context, CL_MEM_READ_ONLY,
+           wA*hA*sizeof(float), NULL, &ret);
+    /* copy Matrix A to the device */
+    clEnqueueWriteBuffer(command_queue, bufferA, CL_TRUE, 0,
+           wA*hA*sizeof(float), (void *)A, 0, NULL, NULL);
 
-$(KERNEL).emu: $(KERNEL).cl
-	$(AOC) -march=emulator -board=pac_a10 $< -o $(TARGET_DIR)/$(AOCX) 
-	echo $(CMDMSG)
+    /* allocate space for Matrix B on the device */
+    cl_mem bufferB = clCreateBuffer(context, CL_MEM_READ_ONLY,
+            wB*hB*sizeof(float), NULL, &ret);
+    /* copy Matrix B to the device */
+    clEnqueueWriteBuffer(command_queue, bufferB, CL_TRUE, 0,
+            wB*hB*sizeof(float), (void *)B, 0, NULL, NULL);
 
-fpga: $(KERNEL).aocx $(TARGET_DIR)/$(TARGET)
+    /* allocate space for Matrix C on the device */
+    cl_mem bufferC = clCreateBuffer(context, CL_MEM_WRITE_ONLY,
+            wC*hC*sizeof(float), NULL, &ret);
 
-$(KERNEL).aocx: $(KERNEL).cl
-	$(AOC) -board=pac_a10 --report $< -o $(TARGET_DIR)/$(AOCX) 
+    /* Set the kernel arguments */
+    clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&bufferC);
+    clSetKernelArg(kernel, 1, sizeof(cl_int), (void *)&wA);
+    clSetKernelArg(kernel, 2, sizeof(cl_int), (void *)&hA);
+    clSetKernelArg(kernel, 3, sizeof(cl_int), (void *)&wB);
+    clSetKernelArg(kernel, 4, sizeof(cl_int), (void *)&hB);
+    clSetKernelArg(kernel, 5, sizeof(cl_mem), (void *)&bufferA);
+    clSetKernelArg(kernel, 6, sizeof(cl_mem), (void *)&bufferB);
 
-# Standard make targets
-clean :
-	$(ECHO)rm -rf $(TARGET_DIR)/$(TARGET) $(TARGET_DIR)/$(KERNEL)*
+    /* Execute the kernel */
+    size_t globalws[2]={wC, hC};
+    size_t localws[2] = {2, 2};
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 2, NULL,
+      globalws, localws, 0, NULL, NULL);
+    /* it is important to check the return value.
+      for example, when enqueueNDRangeKernel may fail when Work group size
+      does not divide evenly into global work size */
+    if (ret != CL_SUCCESS) {
+      printf("Failed to enqueueNDRangeKernel.\n");
+      exit(1);
+    }
 
-.PHONY : all clean
+    /* Copy the output data back to the host */
+    clEnqueueReadBuffer(command_queue, bufferC, CL_TRUE, 0, wC*hC*sizeof(float),
+         (void *)C, 0, NULL, NULL);
 
-endif
-© 2022 GitHub, Inc.
-Terms
-Privacy
-Security
-Status
-Docs
-Contact GitHub
-Pricing
-API
-Training
-Blog
-About
-Loading complete
+    /* Verify result */
+    for (int i = 0; i < wC*hC; i++) {
+      printf ("%f ", C[i]);
+    }
+    printf("\n");
+
+    /* free resources */
+    free(C);
+
+    clReleaseMemObject(bufferA);
+    clReleaseMemObject(bufferB);
+    clReleaseMemObject(bufferC);
+    clReleaseCommandQueue(command_queue);
+    clReleaseKernel(kernel);
+    clReleaseProgram(program);
+    clReleaseContext(context);
+
+    return 0;
+}
+
+#ifdef AOCL
+// Altera OpenCL needs this callback function implemented in main.c
+// Free the resources allocated during initialization
+void cleanup() {
+}
+#endif
