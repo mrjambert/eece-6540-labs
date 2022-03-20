@@ -20,7 +20,6 @@ void cleanup();
 #define DEVICE_NAME_LEN 128
 static char dev_name[DEVICE_NAME_LEN];
 
-#define TEXT_FILE "kafka.txt"
 
 int main()
 {
@@ -43,13 +42,8 @@ int main()
     char fileName[] = "./mykernel.cl";
     char *source_str;
     size_t source_size;
-
-    int result[4] = {0, 0, 0, 0};
-    char pattern[16] = {'t','h','a','t','w','i','t','h','h','a','v','e','f','r','o','m'};
-    FILE *text_handle;
-    char *text;
-    size_t text_size;
-    int chars_per_item;
+    
+    float *result = 0;
 
 #ifdef __APPLE__
     /* Get Platform and Device Info */
@@ -68,7 +62,7 @@ int main()
     clGetPlatformIDs(0, NULL, &platformCount);
     platforms = (cl_platform_id*) malloc(sizeof(cl_platform_id) * platformCount);
     // Get the OpenCL platform.
-    platforms[0] = findPlatform("Intel(R) FPGA");
+    platforms[0] = findPlatform("Intel(R) FPGA Emulation");
     if(platforms[0] == NULL) {
       printf("ERROR: Unable to find Intel(R) FPGA OpenCL platform.\n");
       return false;
@@ -137,64 +131,34 @@ int main()
 
 #endif
 
-    /* Build Kernel Program */
+ /* Build Kernel Program */
     ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
     if (ret != CL_SUCCESS) {
       printf("Failed to build program.\n");
       exit(1);
     }
 
-    /* Create OpenCL Kernel */
-    kernel = clCreateKernel(program, "string_search", &ret);
+ /* Create OpenCL Kernel */
+    kernel = clCreateKernel(program, "calc_pi", &ret);
     if (ret != CL_SUCCESS) {
       printf("Failed to create kernel.\n");
       exit(1);
     }
 
-    /* Read text file and place content into buffer */
-    text_handle = fopen(TEXT_FILE, "r");
-    if(text_handle == NULL) {
-       perror("Couldn't find the text file");
-       exit(1);
-    }
-    fseek(text_handle, 0, SEEK_END);
-    text_size = ftell(text_handle)-1;
-    rewind(text_handle);
-    text = (char*)calloc(text_size, sizeof(char));
-    fread(text, sizeof(char), text_size, text_handle);
-    fclose(text_handle);
-    chars_per_item = text_size / global_size + 1;
-
-    /* Create buffers to hold the text characters and count */
-    cl_mem text_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY |
-          CL_MEM_COPY_HOST_PTR, text_size, text, &ret);
+  /* Create buffer for the values passed in and result */
+    cl_mem result_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE |
+          CL_MEM_COPY_HOST_PTR, sizeof(float), result, &ret);
     if(ret < 0) {
        perror("Couldn't create a buffer");
        exit(1);
     };
-    cl_mem result_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE |
-          CL_MEM_COPY_HOST_PTR, sizeof(result), result, NULL);
-
-    ret = 0;
-    /* Create kernel argument */
-    ret = clSetKernelArg(kernel, 0, sizeof(pattern), pattern);
-    ret |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &text_buffer);
-    ret |= clSetKernelArg(kernel, 2, sizeof(chars_per_item), &chars_per_item);
-    ret |= clSetKernelArg(kernel, 3, 4 * sizeof(int), NULL);
-    ret |= clSetKernelArg(kernel, 4, sizeof(cl_mem), &result_buffer);
+    ret = clSetKernelArg(kernel, 0, global_size * sizeof(cl_float), NULL);
+    ret |= clSetKernelArg(kernel, 1, sizeof(cl_int), (void *)&global_size);
+    ret |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &result_buffer);
     if(ret < 0) {
        printf("Couldn't set a kernel argument");
        exit(1);
     };
-
-    /* Enqueue kernel */
-    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_size,
-          &local_size, 0, NULL, NULL);
-    if(ret < 0) {
-       perror("Couldn't enqueue the kernel");
-       printf("Error code: %d\n", ret);
-       exit(1);
-    }
 
     /* Read and print the result */
     ret = clEnqueueReadBuffer(command_queue, result_buffer, CL_TRUE, 0,
@@ -203,18 +167,9 @@ int main()
        perror("Couldn't read the buffer");
        exit(1);
     }
-
-    printf("\nResults: \n");
-    printf("Number of occurrences of 'that': %d\n", result[0]);
-    printf("Number of occurrences of 'with': %d\n", result[1]);
-    printf("Number of occurrences of 'have': %d\n", result[2]);
-    printf("Number of occurrences of 'from': %d\n", result[3]);
-
+    printf("Pi Equals: %f\n", result);
 
     /* free resources */
-    free(text);
-
-    clReleaseMemObject(text_buffer);
     clReleaseMemObject(result_buffer);
     clReleaseCommandQueue(command_queue);
     clReleaseKernel(kernel);
