@@ -43,7 +43,6 @@ int main()
     char *source_str;
     size_t source_size;
     
-    float *result = 0;
 
 #ifdef __APPLE__
     /* Get Platform and Device Info */
@@ -131,6 +130,7 @@ int main()
 
 #endif
 
+    float result[global_size]= 0.0f;
  /* Build Kernel Program */
     ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
     if (ret != CL_SUCCESS) {
@@ -147,14 +147,13 @@ int main()
 
   /* Create buffer for the values passed in and result */
     cl_mem result_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE |
-          CL_MEM_COPY_HOST_PTR, sizeof(float), result, &ret);
+          CL_MEM_COPY_HOST_PTR, sizeof(result), result, &ret);
     if(ret < 0) {
        perror("Couldn't create a buffer");
        exit(1);
     };
-    ret = clSetKernelArg(kernel, 0, global_size * sizeof(cl_float), NULL);
-    ret |= clSetKernelArg(kernel, 1, sizeof(cl_int), (void *)&global_size);
-    ret |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &result_buffer);
+    ret |= clSetKernelArg(kernel, 0, sizeof(cl_int), (void *)&global_size);
+    ret |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &result_buffer);
     if(ret < 0) {
        printf("Couldn't set a kernel argument");
        exit(1);
@@ -167,7 +166,11 @@ int main()
        perror("Couldn't read the buffer");
        exit(1);
     }
-    printf("Pi Equals: %f\n", result);
+    float global_result = 0.0f;
+    for (i=0; i<num_times; i++)
+        global_result += local_result[i];
+}
+    printf("Pi Equals: %f\n", global_result);
 
     /* free resources */
     clReleaseMemObject(result_buffer);
