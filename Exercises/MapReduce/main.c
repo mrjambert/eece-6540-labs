@@ -158,6 +158,16 @@ int main()
        printf("Couldn't set a kernel argument");
        exit(1);
     };
+    
+    /* Enqueue kernel */
+    ret = clEnqueueNDRangeKernel(command_queue, kernel, 1, NULL, &global_size,
+          &local_size, 0, NULL, NULL);
+    if(ret < 0) {
+       perror("Couldn't enqueue the kernel");
+       printf("Error code: %d\n", ret);
+       exit(1);
+    }
+
 
     /* Read and print the result */
     ret = clEnqueueReadBuffer(command_queue, result_buffer, CL_TRUE, 0,
