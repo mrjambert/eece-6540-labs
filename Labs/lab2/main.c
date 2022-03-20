@@ -20,7 +20,6 @@ void cleanup();
 #define DEVICE_NAME_LEN 128
 static char dev_name[DEVICE_NAME_LEN];
 
-#define TEXT_FILE "kafka.txt"
 
 int main()
 {
