@@ -43,7 +43,7 @@ int main()
     char *source_str;
     size_t source_size;
     
-    float result;
+    float *result = 0;
 
 #ifdef __APPLE__
     /* Get Platform and Device Info */
@@ -146,7 +146,7 @@ int main()
     }
 
   /* Create buffer for the values passed in and result */
-    cl_mem resi;t_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE |
+    cl_mem result_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE |
           CL_MEM_COPY_HOST_PTR, sizeof(float), result, &ret);
     if(ret < 0) {
        perror("Couldn't create a buffer");
@@ -167,7 +167,7 @@ int main()
        perror("Couldn't read the buffer");
        exit(1);
     }
-    printf("Number of occurrences of 'that': %d\n", result);
+    printf("Pi Equals: %f\n", result);
 
     /* free resources */
     clReleaseMemObject(result_buffer);
