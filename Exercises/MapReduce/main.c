@@ -181,7 +181,7 @@ int main()
     for (i=0; i<global_size; i++)
         global_result +=result[i];
     
-    printf("Pi Equals: %f\n", global_result);
+    printf("Pi Equals: %.2f\n", global_result);
 
     /* free resources */
     clReleaseMemObject(result_buffer);
