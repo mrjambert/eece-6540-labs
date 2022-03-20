@@ -9,7 +9,7 @@ __kernel void calc_pi( int num_items, __global float* global_result)
     barrier(CLK_LOCAL_MEM_FENCE);
     if (indx==0)
     { for (int i=0; i<num_items; i++)
-        printf("%3f ",global_result[i])
+        printf("%3f ",global_result[i]);
      }
 }
         
