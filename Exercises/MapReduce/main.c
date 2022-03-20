@@ -130,7 +130,7 @@ int main()
 
 #endif
 
-    float result[global_size]= 0.0f;
+    float result[global_size]= {0.0f};
  /* Build Kernel Program */
     ret = clBuildProgram(program, 1, &device_id, NULL, NULL, NULL);
     if (ret != CL_SUCCESS) {
@@ -167,9 +167,10 @@ int main()
        exit(1);
     }
     float global_result = 0.0f;
-    for (i=0; i<num_times; i++)
-        global_result += local_result[i];
-}
+    int i;
+    for (i=0; i<global_size; i++)
+        global_result += global_result[i];
+    
     printf("Pi Equals: %f\n", global_result);
 
     /* free resources */
