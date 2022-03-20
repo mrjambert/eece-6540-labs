@@ -169,7 +169,7 @@ int main()
     float global_result = 0.0f;
     int i;
     for (i=0; i<global_size; i++)
-        global_result += global_result[i];
+        global_result +=result[i];
     
     printf("Pi Equals: %f\n", global_result);
 
