@@ -80,13 +80,13 @@ TARGET := main
 TARGET_DIR := bin
 
 # Directories
-INC_DIRS := ../aocl_common/inc 
+INC_DIRS := ../common/inc 
 LIB_DIRS :=
 
 
 # Files
 INCS := $(wildcard )
-SRCS := $(wildcard *.cpp *.c ../aocl_common/src/AOCLUtils/*.cpp)
+SRCS := $(wildcard *.cpp *.c ../common/src/AOCLUtils/*.cpp)
 LIBS := rt pthread
 
 KERNEL := mykernel
