@@ -1,4 +1,4 @@
-__kernel void calc_pi( __global float* global_result)
+__kernel void calc_pi(int num_items, __global float* global_result)
 {
     int indx = get_global_id(0);
     float f_indx= indx;
