@@ -152,8 +152,7 @@ int main()
        perror("Couldn't create a buffer");
        exit(1);
     };
-    ret = clSetKernelArg(kernel, 0, sizeof(cl_int), (void *)&global_size);
-    ret |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &result_buffer);
+    ret = clSetKernelArg(kernel, 0, sizeof(cl_mem), &result_buffer);
     if(ret < 0) {
        printf("Couldn't set a kernel argument");
        exit(1);
